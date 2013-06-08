@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <link rel="stylesheet" href="./dojo/dijit/themes/claro/claro.css">
+    <link rel="stylesheet" href="./dojo/dojox/grid/resources/Grid.css">
+    <style>
+        html, body {
+            height: 100%; width: 100%; margin: 0; padding: 0;
+        }
+        .dojoxGrid .dojoxGridCell {
+            text-align:center;
+        }
+
+    </style>
+    <script type="text/javascript">
+        var dojoConfig={
+            parseOnLoad:true
+        }
+    </script>
+    <script type="text/javascript" src="./dojo/dojo/dojo.js"></script>
+    <script>
+        require(["dojo/on","dojo/data/ItemFileReadStore","dojo/DeferredList","dijit/registry","dijit/Dialog","dijit/form/Button","dojo/ready","dojo/dom","dojo/dom-style"],function(on,ItemFileReadStore,DeferredList,registry,Dialog,Button,ready,dom,domStyle){
+            ready(function(){
+                myLoginForm.show();
+                var token,hostname,port;
+                //var test= new e
+                var callback=dojo.hitch(this,function(response){token = response.token});
+                //function getToken(gentokenurl,username,password,token){
+                  //  return dojo.xhrPost({url:gentokenurl,handleAs:"json",content:{username:username,password:password,client:"requestip",f:"json"},load:callback});
+                //}
+
+                show=function(){
+                    hostname=registry.byId("hostname").get("value");
+                    port=registry.byId("port").get("value");
+                    var username=registry.byId("username").get("value");
+                    var password=registry.byId("password").get("value");
+                    var gentokenulr="http://127.0.0.1:8081/test/proxy.php?http://"+hostname+":"+port+"/arcgis/admin/generateToken";
+                    //var token;
+                    var self=this;
+                    //debugger;
+
+                    var def=dojo.xhrPost({url:gentokenulr,handleAs:"json",content:{username:username,password:password,client:"requestip",f:"json"},load:callback});
+
+                    var dataarray=[];
+                    //debugger;
+                    def.addCallback(function(){
+
+                        var def1=dojo.xhrPost({url:"http://127.0.0.1:8081/test/proxy.php?http://"+hostname+":"+port+"/arcgis/admin/services",handleAs:"json",content:{token:token,f:"json"},load:function(response){console.log(response)}
+                        });
+                        def1.addCallback(function(response){
+                            dataarray=response.services;
+                        })
+                        def1.addCallback(function(response){
+                                    //dataarray
+                                    var foldersurlsdefferedlist=dojo.map(response.folders,function(item){return dojo.xhrPost({url:"http://127.0.0.1:8081/test/proxy.php?http://"+hostname+":"+port+"/arcgis/admin/services/"+item,handleAs:"json",content:{token:token,f:"json"}})});
+                                    var DefferedListFolder=new DeferredList(foldersurlsdefferedlist);
+                                    DefferedListFolder.then(function(result){
+                                        console.log(result);
+                                        dojo.forEach(result,function(item){
+                                            //debugger;
+                                            dataarray=dataarray.concat(item[1].services);
+                                        });
+                                        console.log(dataarray);
+                                        var detaildefferedlist1=dojo.map(dataarray,function(item){return dojo.xhrPost({url:"http://127.0.0.1:8081/test/proxy.php?http://"+hostname+":"+port+"/arcgis/admin/services/"+item.folderName+"/"+item.serviceName+"."+item.type,handleAs:"json",content:{token:token,f:"json"}})});
+                                        var detaildefferedlist2=dojo.map(dataarray,function(item){return dojo.xhrPost({url:"http://127.0.0.1:8081/test/proxy.php?http://"+hostname+":"+port+"/arcgis/admin/services/"+item.folderName+"/"+item.serviceName+"."+item.type+"/statistics",handleAs:"json",content:{token:token,f:"json"}})});
+                                        var detailDefList1=new DeferredList(detaildefferedlist1);
+                                        var detailDefList2=new DeferredList(detaildefferedlist2);
+                                        detailDefList1.addCallback(function(result){
+                                            console.log(result);
+                                            console.log(dataarray);
+                                            dojo.forEach(result,function(resultitem,i){
+                                                        //debugger;
+                                                        dojo.mixin(dataarray[i],resultitem[1]);}
+                                            );
+                                            //console.log(dataarray);
+                                        });
+                                        detailDefList1.addCallback(function(result){
+                                            detailDefList2.addCallback(function(staresult){
+                                                console.log(dataarray);
+                                                console.log(staresult);
+                                                dojo.forEach(staresult,function(resultitem,i){
+                                                            //debugger;
+                                                            dojo.mixin(dataarray[i],{id:i});
+                                                            dojo.mixin(dataarray[i],resultitem[1].summary);}
+                                                );
+                                                console.log(dataarray);
+                                                //var testdata=[{id:1,folderName:"123",serviceName:"123",max:1,busy:1,free:1,initializing:1,totalBusyTime:1235}];
+                                                var testdata=dojo.map(dataarray,function(item){
+                                                    return {id:item.id,type:item.type,folderName:item.folderName ,serviceName:item.serviceName,max:item.max,busy:item.busy,free:item.free, initializing:item.initializing,totalBusyTime:item.totalBusyTime};
+                                                });
+
+                                                var itemdatastore=new ItemFileReadStore({data:{identifier: "id", items: testdata}});
+                                                debugger;
+                                                grid.setStore(itemdatastore);
+                                            });
+                                            detailDefList2.addCallback(function(){
+                                                console.log(dataarray);
+                                                //debugger;
+                                                //on(grid,"onRowClick",function(e){//using on doesn't work
+                                                dojo.connect(grid,"onRowClick",function(e){
+                                                    //console.log(e);
+                                                    //console.log(e.rowIndex);
+                                                    //console.log(grid.getItem(e.rowIndex));
+                                                    //console.log(grid.getItem(e.rowIndex).folderName);
+                                                    var getgrid=grid.getItem(e.rowIndex);
+                                                    registry.byId("servicename").set("value",getgrid.serviceName[0]);
+                                                    registry.byId("foldername").set("value",getgrid.folderName[0]);
+                                                    registry.byId("servicetype").set("value",getgrid.type[0]);
+                                                    if(serviceselect.get("idtype")!="mapserver"&&getgrid.type[0]==="MapServer"){
+                                                        debugger;
+                                                        serviceselect.removeOption(serviceselect.getOptions());
+                                                        serviceselect.addOption({label:"ALL",value:"all"});
+                                                        serviceselect.addOption({label:"Export Map",value:"10011"});
+                                                        serviceselect.addOption({label:"Query",value:"10023"});
+                                                        serviceselect.addOption({label:"Find",value:"10015"});
+                                                        serviceselect.addOption({label:"Identify",value:"10017"});
+                                                        serviceselect.set("idtype","mapserver");
+                                                    }
+                                                    if(getgrid.type[0]==="GPServer"&&serviceselect.get("idtype")!="gpserver"){
+                                                        debugger;
+                                                        serviceselect.removeOption(serviceselect.getOptions());
+                                                        serviceselect.addOption({label:"REST&SOAP",value:"REST&SOAP"});
+                                                        serviceselect.addOption({label:"REST请求",value:"REST"});
+                                                        serviceselect.addOption({label:"SOAP请求",value:"SOAP"});
+                                                        serviceselect.set("idtype","gpserver");
+                                                    }
+
+                                                });
+
+                                            })
+                                            //detailDefList2.addCallback(function(result){
+
+                                            //});
+                                        });
+
+
+                                    });
+                                }
+                        );
+                    });
+
+                    //console.log(registry.byId("hostname").get('value'));
+                }
+                calcount=function(response){
+                    return [{x:1,y:response.exportfile.length,tooltip:"Export Map次数："+response.exportfile.length,type:"exportfile"},{x:1,y:response.findfile.length,tooltip:"Find 次数："+response.findfile.length,type:"findfile"},
+                        {x:1,y:response.queryfile.length,tooltip:"Query次数："+response.queryfile.length,type:"queryfile"},{x:1,y:response.identifyfile.length,tooltip:"Identify次数："+response.identifyfile.length,type:"identifyfile"}];
+
+                }
+                generatedata=function(response){
+                    var identifyfilestore=[],findfilestore=[],queryfilestore=[],exportfilestore=[];
+                    var exportmapcount= 0;
+                    var findcount= 0;
+                    var querycount= 0;
+                    var identifycount= 0;
+                    dojo.forEach(response.logMessages,function(item){
+                        var formattedtime=dojo.date.locale.format(new Date(item.time),{
+                            selector:"date",
+                            am:"上午",
+                            fullYear:true,
+                            loacle:"zh",
+                            pm:"下午",
+                            datePattern:"yyyy年MM月dd日 H:mm:s"});
+
+                            if(item.code==10017){
+                            identifycount+=1;
+                            identifyfilestore.push({id:identifycount,operationtime:formattedtime,elapsedtime:item.elapsed})
+                        }else if(item.code==10015){
+                            findcount+=1;
+                            findfilestore.push({id:findcount,operationtime:formattedtime,elapsedtime:item.elapsed})
+                        }else if(item.code ==10011){
+                            exportmapcount+=1;
+                            exportfilestore.push({id:exportmapcount,operationtime:formattedtime,elapsedtime:item.elapsed})
+                        }else if(item.code ==10023){
+                            querycount+=1;
+                            queryfilestore.push({id:querycount,operationtime:formattedtime,elapsedtime:item.elapsed})
+                        }
+                    });
+                    debugger;
+                    return {exportfile:exportfilestore,queryfile:queryfilestore,findfile:findfilestore,identifyfile:identifyfilestore};
+
+                }
+                createdatagridforchart=function(itemfilestore,divid){
+                    if(!dijit.byId(divid)){
+                    var grid1= new dojox.grid.DataGrid({
+                        store:itemfilestore,
+                        query:{id:"*"},
+                        structure:[{name:"操作时间",field:"operationtime",width:"auto"},{name:"耗时",field:"elapsedtime",width:"auto"}]
+                    },divid);
+                    grid1.startup();
+                    }else{
+                        dijit.byId(divid).setStore(itemfilestore);
+                        dijit.byId(divid).update();
+                    }
+                }
+                createpiechart=function(data,divid){
+                    //var chart;
+                    require(["dojox/charting/Chart","dojox/charting/themes/Claro",
+                        "dojox/charting/plot2d/Pie","dojox/charting/action2d/Tooltip",
+                        "dojox/charting/action2d/MoveSlice","dojox/charting/plot2d/Markers",
+                        "dojox/charting/axis2d/Default"],function(Chart, theme, Pie, Tooltip, MoveSlice){
+                        var chartData = calcount(data);
+
+
+                        debugger;
+                        // Create the chart within it's "holding" node
+                        if(!chart){
+                        chart = new Chart(divid);
+                        chart.setTheme(theme);
+                        chart.addPlot("default", {
+                            type: Pie,
+                            markers: true,
+                            radius:100
+                        });
+                        chart.addAxis("x");
+                        chart.addAxis("y", { min: 5000, max: 30000, vertical: true, fixLower: "major", fixUpper: "major" });
+                        chart.addSeries("AllOperations",chartData);
+                        var tip = new Tooltip(chart,"default");
+                        var mag = new MoveSlice(chart,"default");
+
+
+                        }else{
+                            chart.updateSeries("AllOperations",chartData);
+                        }
+                        var showdatagrid=function(data,e){
+                            if(e.type=="onclick"){
+                                debugger;
+                                var itemstore=new ItemFileReadStore({data:{identifier: "id", items: data[e.run.data[e.index].type]}});
+                                createdatagridforchart(itemstore,"detaildatgrid");
+                            }
+                        };
+                        chart.connectToPlot("default",dojo.hitch(null,showdatagrid,data));//hitch保证闭包中数据正确
+                        chart.render();
+
+                    });
+                }
+                var chart;
+
+
+                getstastics=function(){
+                    //console.log(token);
+                    var filter={"codes":[],
+                        "processIds":[],
+                        "server": "*",
+                        "services": [],
+                        "machines": "*"};
+                    var serviceName=registry.byId("servicename").get("value");
+                    var folderName=registry.byId("foldername").get("value");
+                    var serviceType=registry.byId("servicetype").get("value");
+                    filter.services.push(serviceName+"."+serviceType);
+                    var operationType=serviceselect.get("value");
+                    var startDate=startdate.get("value").getTime();
+                    var endDate=enddate.get("value").getTime();
+                    var logquery="http://127.0.0.1:8081/test/proxy.php?http://"+hostname+":"+port+"/arcgis/admin/logs/query";
+                    var logdef;
+                    if(serviceType=="MapServer"){
+                    if(operationType=="all"){
+                        filter.codes.push(10015);
+                        filter.codes.push(10017);
+                        filter.codes.push(10023);
+                        filter.codes.push(10011);
+                        var sendcontent={f:"json",token:token,endTime:endDate,startTime:startDate,level:"FINE",filterType:"json",filter:JSON.stringify(filter)};
+                        logdef=dojo.xhrPost({url:logquery,content:sendcontent,load:function(response){console.log(response)}});
+                        logdef.addCallback(function(response){
+                            var responseobj=JSON.parse(response);
+                            var datafilestore=generatedata(responseobj);//exportmap,query,find,identify
+                            //var dataforchart=calcount(datafilestore);
+                            createpiechart(datafilestore,piechartnode);
+                        });
+                    }else if(operationType=="10011"){
+                        filter.codes.push(10011);
+                        var sendcontent={f:"json",token:token,endTime:endDate,startTime:startDate,level:"FINE",filterType:"json",filter:JSON.stringify(filter)};
+                        logdef=dojo.xhrPost({url:logquery,content:sendcontent,load:function(response){console.log(response)}});
+                    }else if(operationType=="10017"){
+                        filter.codes.push(10017);
+                        var sendcontent={f:"json",token:token,endTime:endDate,startTime:startDate,level:"FINE",filterType:"json",filter:JSON.stringify(filter)};
+                        logdef=dojo.xhrPost({url:logquery,content:sendcontent,load:function(response){console.log(response)}});
+                    }else if(operationType=="10015"){
+                        filter.codes.push(10015);
+                        var sendcontent={f:"json",token:token,endTime:endDate,startTime:startDate,level:"FINE",filterType:"json",filter:JSON.stringify(filter)};
+                        logdef=dojo.xhrPost({url:logquery,content:sendcontent,load:function(response){console.log(response)}});
+                    }else {
+                        filter.codes.push(10023);
+                        var sendcontent={f:"json",token:token,endTime:endDate,startTime:startDate,level:"FINE",filterType:"json",filter:JSON.stringify(filter)};
+                        logdef=dojo.xhrPost({url:logquery,content:sendcontent,load:function(response){console.log(response)}});
+                    }
+                    }else if(serviceType=="GPServer"){
+
+                    }
+
+                    logdef.addCallback(function(response){
+                        debugger;
+                        var responseobj=JSON.parse(response);
+                        console.log(responseobj.logMessages.length);
+
+                    })
+
+                }
+            });
+        });
+    </script>
+</head>
+<body class="claro" >
+<div data-dojo-type="dijit/Dialog" data-dojo-id="myLoginForm" title="Login">
+    <table>
+        <tr><td><label for="hostname">HostName</label></td><td><input required="true" type="text" data-dojo-type="dijit/form/ValidationTextBox" value="localhost" name="hostname" id="hostname"></td></tr>
+        <tr><td><label for="port">Port</label></td><td><input type="text" required="true" data-dojo-type="dijit/form/ValidationTextBox" name="port" id="port" value="6080"></td></tr>
+        <tr><td><label for="username">Username</label></td><td><input type="text" required="true" data-dojo-type="dijit/form/ValidationTextBox" name="username" id="username" value="sgghe"></td></tr>
+        <tr><td><label for="password">Password</label></td><td><input type="password" required="true" data-dojo-type="dijit/form/ValidationTextBox" name="username" id="password" value="8881060"></td></tr>
+    </table>
+    <div class="dijitDialogPaneActionBar">
+        <button dojoType="dijit.form.Button" type="submit" onClick="show()" id="ok">OK</button>
+        <button dojoType="dijit.form.Button" type="button" onClick="myLoginForm.onCancel();"id="cancel">Cancel</button>
+    </div>
+</div>
+
+<div data-dojo-type="dijit/layout/BorderContainer" design="sidebar" persist="false" gutters="true" style="min-width: 1em; min-height: 1px; z-index: 0; width: 100%; height: 100%;">
+    <div data-dojo-type="dijit/layout/ContentPane" extractContent="false" preventCache="false" preload="false" refreshOnShow="false" region="bottom" splitter="true" maxSize="Infinity" doLayout="false" style="height:280px;"></div>
+    <div data-dojo-type="dijit/layout/ContentPane" extractContent="false" preventCache="false" preload="false" refreshOnShow="false" region="left" splitter="true" maxSize="Infinity" doLayout="false" style="width:400px;">
+        <table>
+            <tr><td><label for="servicename">ServiceName</label></td><td><input required="true" type="text" data-dojo-type="dijit/form/ValidationTextBox"  id="servicename"></td></tr>
+            <tr><td><label for="foldername">FolderName</label></td><td><input type="text" required="true" data-dojo-type="dijit/form/ValidationTextBox"  id="foldername" ></td></tr>
+            <tr><td><label for="servicetype">ServiceType</label></td><td><input type="text" required="true" data-dojo-type="dijit/form/ValidationTextBox"  id="servicetype" ></td></tr>
+            <tr><td><label for="serviceoperation">Operation Type</label></td><td>
+                <select id="serviceoperation" idtype="mapserver" data-dojo-type="dijit/form/Select" data-dojo-id="serviceselect">
+                <option value="all">ALL</option>
+                <option value="10011">Export Map</option>
+                <option value="10023">Query</option>
+                <option value="10015">Find</option>
+                <option value="10017">Identify</option>
+            </select>
+            </td></tr>
+            <tr><td><label for="starttime">Strat Time</label></td><td><input type="text" required="true" data-dojo-id="startdate" data-dojo-type="dijit/form/DateTextBox"  id="starttime" ></td></tr>
+            <tr><td><label for="endtime">End Time</label></td><td><input type="text" required="true" data-dojo-id="enddate" data-dojo-type="dijit/form/DateTextBox"  id="endtime" ></td></tr>
+            <tr><td><button data-dojo-type="dijit/form/Button" onclick="getstastics()" data-dojo-id="getstastics">信息统计</button></td></tr>
+        </table>
+        <div id="piechartnode" style="width:350px;height:350px;"></div>
+        <div id="detaildatgrid"></div>
+    </div>
+    <div data-dojo-type="dijit/layout/ContentPane" extractContent="false" preventCache="false" preload="false" refreshOnShow="false" region="right" splitter="true" maxSize="Infinity" doLayout="false" style="width: 250px; left: 930px; top: 5px;"></div>
+    <div data-dojo-type="dijit/layout/ContentPane" extractContent="false" preventCache="false" preload="false" refreshOnShow="false" region="center" splitter="false" maxSize="Infinity" doLayout="false" style="width:1106px;height:278px">
+        <table data-dojo-type="dojox/grid/DataGrid" data-dojo-id="grid" style=" min-width: 1em; min-height: 1em; position: relative; left: 0px; top: 0px; height: 100%; width: 100%;" data-dojo-props="cacheClass: 'gridx/core/model/cache/Async',structure:[{width:'auto',name:'服务名称',field:'serviceName'},{width:'auto',name:'文件夹',field:'folderName'},{width:'auto',name:'服务类型',field:'type'},{width:'auto',name:'运行实例',field:'busy'},{width:'auto',name:'空闲实例',field:'free'},{width:'auto',name:'初始化中实例',field:'initializing'},{width:'auto',name:'最大实例',field:'max'},{width:'auto',name:'服务运行时间(ms)',field:'totalBusyTime'}]"></table>
+    </div>
+</div>
+</body>
+</html>
